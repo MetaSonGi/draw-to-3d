@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#141428">
+<title>draw-to-3d — 그림을 3D 모델로</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background:#f2f3f7; color:#1c1c28; line-height:1.6;
+  }
+  header {
+    background:linear-gradient(135deg,#141428,#3b3b78);
+    color:#fff; text-align:center; padding:34px 16px 28px;
+  }
+  header h1 { font-size:30px; letter-spacing:-0.5px; }
+  header p { font-size:14px; opacity:.8; margin-top:6px; }
+  main { max-width:960px; margin:0 auto; padding:20px 14px 60px; }
+  .card {
+    background:#fff; border-radius:16px; padding:22px; margin-bottom:18px;
+    box-shadow:0 4px 18px rgba(20,20,60,.08);
+  }
+  .card h2 { font-size:19px; margin-bottom:14px; display:flex; align-items:center; gap:10px; }
+  .step {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:30px; height:30px; border-radius:50%; flex:0 0 30px;
+    background:linear-gradient(135deg,#6c63ff,#3b3b78); color:#fff; font-size:15px; font-weight:800;
+  }
+  .card h2 small { font-size:12px; color:#888; font-weight:400; }
+  .row { display:flex; gap:20px; flex-wrap:wrap; }
+  .canvas-wrap { flex:1 1 340px; min-width:0; }
+  #draw {
+    width:100%; max-width:440px; aspect-ratio:1/1; height:auto; display:block;
+    border:2px solid #d5d7e3; border-radius:12px; touch-action:none; cursor:crosshair;
+    background:#000;
+  }
+  .controls { flex:1 1 260px; min-width:240px; display:flex; flex-direction:column; gap:12px; }
+  .ctl label { font-size:13px; font-weight:700; display:flex; justify-content:space-between; margin-bottom:4px; }
+  .ctl label span { color:#6c63ff; }
+  input[type=range] { width:100%; accent-color:#6c63ff; }
+  .btnrow { display:flex; gap:8px; flex-wrap:wrap; }
+  button, .filebtn {
+    font-family:inherit; font-size:14px; font-weight:700; border:0; border-radius:10px;
+    padding:10px 16px; cursor:pointer; background:#eceef5; color:#1c1c28;
+    transition:transform .05s, background .15s;
+  }
+  button:active, .filebtn:active { transform:translateY(1px); }
+  button.primary { background:linear-gradient(135deg,#6c63ff,#3b3b78); color:#fff; font-size:16px; padding:13px 26px; }
+  button.accent { background:#ffd60a; }
+  button.danger { background:#ffe3e3; color:#c1121f; }
+  button.on { background:#6c63ff; color:#fff; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  .filebtn { display:inline-block; background:#e7f5ff; color:#0b6fa4; }
+  input[type=file] { display:none; }
+  select, input[type=text], input[type=password] {
+    font-family:inherit; font-size:14px; padding:9px 12px; border:2px solid #d5d7e3;
+    border-radius:10px; width:100%; background:#fff;
+  }
+  .check { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; }
+  .check input { width:18px; height:18px; accent-color:#6c63ff; }
+  .hint { font-size:12.5px; color:#777; margin-top:10px; }
+  .warn {
+    font-size:12.5px; color:#9c5b00; background:#fff4dd; border-radius:10px;
+    padding:10px 14px; margin-top:10px;
+  }
+  #preview {
+    width:100%; height:420px; border-radius:12px; overflow:hidden; position:relative;
+    background:radial-gradient(circle at 50% 30%, #2b2b55, #101020 75%);
+    touch-action:none;
+  }
+  #preview canvas { display:block; }
+  .preview-bar { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; align-items:center; }
+  #meshInfo { font-size:13px; color:#555; margin-top:8px; }
+  .dlrow { display:flex; gap:10px; flex-wrap:wrap; }
+  .dlrow button { font-size:16px; padding:14px 22px; }
+  #toast {
+    position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px);
+    background:rgba(20,20,40,.92); color:#fff; font-size:14px; font-weight:600;
+    padding:12px 22px; border-radius:30px; opacity:0; pointer-events:none;
+    transition:opacity .25s, transform .25s; z-index:99; max-width:90vw; text-align:center;
+  }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  footer { text-align:center; font-size:12px; color:#999; padding:0 16px 30px; }
+  @media (max-width:560px) {
+    .card { padding:16px; }
+    #preview { height:340px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎨 draw-to-3d</h1>
+  <p>그림을 3D 모델로 변환 — STL / OBJ / GLB 다운로드 · OctoPrint 전송</p>
+</header>
+<main>
+
+  <section class="card" id="sec1">
+    <h2><span class="step">1</span> 그리기 / 이미지 업로드</h2>
+    <div class="row">
+      <div class="canvas-wrap"><canvas id="draw" width="512" height="512"></canvas></div>
+      <div class="controls">
+        <div class="ctl">
+          <label>브러시 크기 <span id="brushSizeVal">16px</span></label>
+          <input type="range" id="brushSize" min="2" max="60" value="16">
+        </div>
+        <div class="ctl">
+          <label>브러시 밝기 <span id="brushBrightVal">255</span></label>
+          <input type="range" id="brushBright" min="0" max="255" value="255">
+        </div>
+        <div class="btnrow">
+          <button id="toolBrush" class="on">🖌 브러시</button>
+          <button id="toolEraser">🧽 지우개</button>
+        </div>
+        <div class="btnrow">
+          <button id="undoBtn">↩ 실행 취소</button>
+          <button id="clearBtn" class="danger">🗑 전체 지우기</button>
+        </div>
+        <div class="ctl">
+          <label>배경색</label>
+          <select id="bgSel">
+            <option value="#000000" selected>검정 (밝은 부분이 높게)</option>
+            <option value="#ffffff">흰색 (어두운 부분이 높게)</option>
+          </select>
+        </div>
+        <div class="btnrow">
+          <label class="filebtn" for="imgUp">🖼 이미지 업로드</label>
+          <input type="file" id="imgUp" accept="image/png,image/jpeg">
+          <button id="sampleBtn">✨ 샘플 그림</button>
+        </div>
+        <p class="hint">밝은 부분이 3D에서 높게 솟아오릅니다. 검정 배경 + 흰 브러시가 가장 직관적이에요.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="sec2">
+    <h2><span class="step">2</span> 3D 변환 설정</h2>
+    <div class="row">
+      <div class="controls">
+        <div class="ctl">
+          <label>높이(깊이) <span id="heightVal">10mm</span></label>
+          <input type="range" id="heightMM" min="2" max="50" value="10">
+        </div>
+        <div class="ctl">
+          <label>베이스 두께 <span id="baseVal">2mm</span></label>
+          <input type="range" id="baseMM" min="0" max="10" value="2">
+        </div>
+        <div class="ctl">
+          <label>스무딩(블러) <span id="smoothVal">1px</span></label>
+          <input type="range" id="smoothPX" min="0" max="5" value="1">
+        </div>
+      </div>
+      <div class="controls">
+        <div class="ctl">
+          <label>메시 해상도</label>
+          <select id="resSel">
+            <option value="64">64 (빠름)</option>
+            <option value="128" selected>128 (권장)</option>
+            <option value="192">192 (고해상도)</option>
+          </select>
+        </div>
+        <p class="hint" id="triEst">예상 삼각형 수: 약 33,794개</p>
+        <label class="check"><input type="checkbox" id="invertChk"> 밝기 반전 (어두울수록 높게)</label>
+        <p class="hint">출력 크기: 가로 100mm 고정 (세로 비율 유지 · 정사각형이므로 100×100mm)</p>
+      </div>
+    </div>
+    <div class="btnrow" style="margin-top:14px">
+      <button id="genBtn" class="primary">🧊 3D 생성</button>
+    </div>
+  </section>
+
+  <section class="card" id="sec3" style="background:#16162a; color:#eee;">
+    <h2 style="color:#fff;"><span class="step">3</span> 3D 미리보기</h2>
+    <div id="preview"></div>
+    <div class="preview-bar">
+      <button id="rotBtn" class="on">🔄 자동 회전</button>
+      <button id="wireBtn">🕸 와이어프레임</button>
+    </div>
+    <p id="meshInfo" style="color:#aaa;">아직 3D 모델이 없습니다. 위에서 "3D 생성"을 눌러주세요.</p>
+  </section>
+
+  <section class="card" id="sec4">
+    <h2><span class="step">4</span> 다운로드</h2>
+    <div class="dlrow">
+      <button id="dlStl" class="accent">⬇ STL</button>
+      <button id="dlObj" class="accent">⬇ OBJ</button>
+      <button id="dlGlb" class="accent">⬇ GLB</button>
+    </div>
+    <p class="hint">단위: mm. FBX가 필요하면 GLB를 Blender에 가져온 뒤 FBX로 내보내기 하세요. (브라우저에서는 FBX 직접 내보내기가 지원되지 않습니다)</p>
+  </section>
+
+  <section class="card" id="sec5">
+    <h2><span class="step">5</span> 3D 프린터로 전송 <small>(선택사항)</small></h2>
+    <div class="row">
+      <div class="controls">
+        <div class="ctl"><label>프린터 URL</label><input type="text" id="octoUrl" placeholder="http://192.168.1.100"></div>
+      </div>
+      <div class="controls">
+        <div class="ctl"><label>API 키</label><input type="password" id="octoKey" placeholder="OctoPrint API Key"></div>
+      </div>
+    </div>
+    <div class="btnrow" style="margin-top:12px">
+      <button id="octoTest">🔌 연결 테스트</button>
+      <button id="octoSend" class="primary">🖨 프린터로 전송 (STL)</button>
+    </div>
+    <p class="hint">프린터 없이도 STL 다운로드 후 Cura / Bambu Studio / OrcaSlicer 등 슬라이서에서 사용 가능합니다.</p>
+    <p class="warn">⚠ GitHub Pages(HTTPS)에서는 http:// 프린터 주소가 브라우저 보안 정책에 막힐 수 있습니다. 프린터 전송 시에는 이 index.html 파일을 직접 열어(http:// 또는 file://) 사용하세요.</p>
+  </section>
+
+</main>
+<div id="toast"></div>
+<footer>draw-to-3d · 그림 → 3D 릴리프 변환기 · 단위 mm</footer>
+
+<script type="importmap">
+{"imports": {"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+/*__PURE_START__*/
+// ---- 순수 함수 (DOM 의존 없음: node 테스트 가능) ----
+function computeHeights(img, w, h, res, invert, smooth) {
+  const n = res + 1;
+  const hs = new Float32Array(n * n);
+  const b = Math.max(0, Math.floor((w / res) / 2)); // 샘플 블록 반경
+  const d = img.data;
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const cx = Math.round(i * (w - 1) / res);
+      const cy = Math.round(j * (h - 1) / res);
+      const x0 = Math.max(0, cx - b), x1 = Math.min(w - 1, cx + b);
+      const y0 = Math.max(0, cy - b), y1 = Math.min(h - 1, cy + b);
+      let sum = 0, cnt = 0;
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const p = (y * w + x) * 4;
+          sum += 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2];
+          cnt++;
+        }
+      }
+      const v = sum / cnt / 255;
+      hs[j * n + i] = invert ? 1 - v : v;
+    }
+  }
+  // 박스 블러 2패스 (가우시안 근사)
+  for (let pass = 0; pass < 2; pass++) {
+    if (smooth <= 0) break;
+    const src = Float32Array.from(hs);
+    const r = Math.round(smooth);
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        let s = 0, c = 0;
+        for (let dj = -r; dj <= r; dj++) {
+          for (let di = -r; di <= r; di++) {
+            const ii = i + di, jj = j + dj;
+            if (ii >= 0 && ii < n && jj >= 0 && jj < n) { s += src[jj * n + ii]; c++; }
+          }
+        }
+        hs[j * n + i] = s / c;
+      }
+    }
+  }
+  return hs;
+}
+
+function buildMeshData(heights, res, heightMM, baseMM, sizeMM) {
+  const n = res + 1;
+  const tris = [];
+  const tIdx = (i, j) => j * n + i;
+  const vx = new Float32Array(n * n), vy = new Float32Array(n * n), vz = new Float32Array(n * n);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const k = j * n + i;
+      vx[k] = (i / res - 0.5) * sizeMM;
+      vy[k] = (0.5 - j / res) * sizeMM;
+      vz[k] = baseMM + heights[k] * heightMM;
+    }
+  }
+  const push = (ax, ay, az, bx, by, bz, cx, cy, cz) => { tris.push(ax, ay, az, bx, by, bz, cx, cy, cz); };
+  // 상단 표면 (+z 법선)
+  for (let j = 0; j < res; j++) {
+    for (let i = 0; i < res; i++) {
+      const a = tIdx(i, j), b = tIdx(i + 1, j), c = tIdx(i, j + 1), d = tIdx(i + 1, j + 1);
+      push(vx[a], vy[a], vz[a], vx[c], vy[c], vz[c], vx[b], vy[b], vz[b]);
+      push(vx[b], vy[b], vz[b], vx[c], vy[c], vz[c], vx[d], vy[d], vz[d]);
+    }
+  }
+  // 옆면(skirt): 경계를 시계방향(위에서 본 기준)으로 순회
+  const loop = [];
+  for (let i = 0; i < res; i++) loop.push([i, 0]);
+  for (let j = 0; j < res; j++) loop.push([res, j]);
+  for (let i = res; i > 0; i--) loop.push([i, res]);
+  for (let j = res; j > 0; j--) loop.push([0, j]);
+  for (let k = 0; k < loop.length; k++) {
+    const p = loop[k], q = loop[(k + 1) % loop.length];
+    const pi = tIdx(p[0], p[1]), qi = tIdx(q[0], q[1]);
+    const tax = vx[pi], tay = vy[pi], taz = vz[pi];
+    const tbx = vx[qi], tby = vy[qi], tbz = vz[qi];
+    push(tax, tay, taz, tbx, tby, tbz, tbx, tby, 0);
+    push(tax, tay, taz, tbx, tby, 0, tax, tay, 0);
+  }
+  // 바닥면 (-z 법선)
+  const S = sizeMM / 2;
+  push(-S, S, 0, S, S, 0, S, -S, 0);
+  push(-S, S, 0, S, -S, 0, -S, -S, 0);
+  return { positions: new Float32Array(tris), triCount: tris.length / 9, vertCount: n * n };
+}
+
+function triArea(ax, ay, az, bx, by, bz, cx, cy, cz) {
+  const ux = bx - ax, uy = by - ay, uz = bz - az;
+  const wx = cx - ax, wy = cy - ay, wz = cz - az;
+  const nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+  return 0.5 * Math.sqrt(nx * nx + ny * ny + nz * nz);
+}
+
+function encodeSTL(positions) {
+  // 퇴화 삼각형(면적 ~0)은 제외
+  const kept = [];
+  for (let t = 0; t < positions.length; t += 9) {
+    if (triArea(positions[t], positions[t+1], positions[t+2], positions[t+3], positions[t+4], positions[t+5], positions[t+6], positions[t+7], positions[t+8]) > 1e-12) {
+      kept.push(t);
+    }
+  }
+  const buf = new ArrayBuffer(84 + kept.length * 50);
+  const dv = new DataView(buf);
+  const header = 'draw-to-3d binary STL (mm)';
+  for (let i = 0; i < header.length && i < 80; i++) dv.setUint8(i, header.charCodeAt(i));
+  dv.setUint32(80, kept.length, true);
+  let o = 84;
+  for (const t of kept) {
+    const ax = positions[t], ay = positions[t+1], az = positions[t+2];
+    const bx = positions[t+3], by = positions[t+4], bz = positions[t+5];
+    const cx = positions[t+6], cy = positions[t+7], cz = positions[t+8];
+    const ux = bx - ax, uy = by - ay, uz = bz - az;
+    const wx = cx - ax, wy = cy - ay, wz = cz - az;
+    let nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+    const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+    nx /= len; ny /= len; nz /= len;
+    dv.setFloat32(o, nx, true); dv.setFloat32(o + 4, ny, true); dv.setFloat32(o + 8, nz, true);
+    dv.setFloat32(o + 12, ax, true); dv.setFloat32(o + 16, ay, true); dv.setFloat32(o + 20, az, true);
+    dv.setFloat32(o + 24, bx, true); dv.setFloat32(o + 28, by, true); dv.setFloat32(o + 32, bz, true);
+    dv.setFloat32(o + 36, cx, true); dv.setFloat32(o + 40, cy, true); dv.setFloat32(o + 44, cz, true);
+    dv.setUint16(o + 48, 0, true);
+    o += 50;
+  }
+  return new Uint8Array(buf);
+}
+
+function encodeOBJ(positions) {
+  const lines = ['# draw-to-3d OBJ (mm)'];
+  let vi = 1;
+  const faces = [];
+  for (let t = 0; t < positions.length; t += 9) {
+    if (triArea(positions[t], positions[t+1], positions[t+2], positions[t+3], positions[t+4], positions[t+5], positions[t+6], positions[t+7], positions[t+8]) <= 1e-12) continue;
+    for (let k = 0; k < 3; k++) {
+      lines.push('v ' + positions[t + k*3].toFixed(4) + ' ' + positions[t + k*3 + 1].toFixed(4) + ' ' + positions[t + k*3 + 2].toFixed(4));
+    }
+    faces.push('f ' + vi + ' ' + (vi + 1) + ' ' + (vi + 2));
+    vi += 3;
+  }
+  return lines.concat(faces).join('\n') + '\n';
+}
+/*__PURE_END__*/
+
+// ================= 2D 드로잉 =================
+const draw = document.getElementById('draw');
+const dctx = draw.getContext('2d', { willReadFrequently: true });
+const SIZE = 512;
+let brushSize = 16, brushBright = 255, eraser = false, bgColor = '#000000';
+const undoStack = [];
+
+function gray(v) { return 'rgb(' + v + ',' + v + ',' + v + ')'; }
+function fillBG() { dctx.fillStyle = bgColor; dctx.fillRect(0, 0, SIZE, SIZE); }
+function pushUndo() {
+  try { undoStack.push(dctx.getImageData(0, 0, SIZE, SIZE)); } catch (e) {}
+  if (undoStack.length > 20) undoStack.shift();
+}
+fillBG();
+
+let drawing = false, lastX = 0, lastY = 0;
+function canvasPos(e) {
+  const r = draw.getBoundingClientRect();
+  return [(e.clientX - r.left) * SIZE / r.width, (e.clientY - r.top) * SIZE / r.height];
+}
+function strokeTo(x, y) {
+  dctx.strokeStyle = eraser ? bgColor : gray(brushBright);
+  dctx.lineWidth = brushSize;
+  dctx.lineCap = 'round'; dctx.lineJoin = 'round';
+  dctx.beginPath(); dctx.moveTo(lastX, lastY); dctx.lineTo(x, y); dctx.stroke();
+  lastX = x; lastY = y;
+}
+draw.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  draw.setPointerCapture(e.pointerId);
+  pushUndo();
+  const [x, y] = canvasPos(e);
+  drawing = true; lastX = x; lastY = y;
+  strokeTo(x + 0.1, y + 0.1);
+});
+draw.addEventListener('pointermove', (e) => {
+  if (!drawing) return;
+  e.preventDefault();
+  const [x, y] = canvasPos(e);
+  strokeTo(x, y);
+});
+const endStroke = () => { drawing = false; };
+draw.addEventListener('pointerup', endStroke);
+draw.addEventListener('pointercancel', endStroke);
+
+document.getElementById('brushSize').addEventListener('input', (e) => {
+  brushSize = +e.target.value;
+  document.getElementById('brushSizeVal').textContent = brushSize + 'px';
+});
+document.getElementById('brushBright').addEventListener('input', (e) => {
+  brushBright = +e.target.value;
+  document.getElementById('brushBrightVal').textContent = brushBright;
+});
+const toolBrush = document.getElementById('toolBrush'), toolEraser = document.getElementById('toolEraser');
+toolBrush.addEventListener('click', () => { eraser = false; toolBrush.classList.add('on'); toolEraser.classList.remove('on'); });
+toolEraser.addEventListener('click', () => { eraser = true; toolEraser.classList.add('on'); toolBrush.classList.remove('on'); });
+document.getElementById('undoBtn').addEventListener('click', () => {
+  const img = undoStack.pop();
+  if (img) { dctx.putImageData(img, 0, 0); toast('실행 취소'); }
+  else toast('되돌릴 기록이 없습니다');
+});
+document.getElementById('clearBtn').addEventListener('click', () => { pushUndo(); fillBG(); });
+document.getElementById('bgSel').addEventListener('change', (e) => {
+  bgColor = e.target.value; pushUndo(); fillBG();
+  toast(bgColor === '#000000' ? '검정 배경: 밝을수록 높게' : '흰색 배경: 어두울수록 높게');
+});
+
+document.getElementById('imgUp').addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const img = new Image();
+  img.onload = () => {
+    pushUndo(); fillBG();
+    const s = Math.min(SIZE / img.width, SIZE / img.height);
+    const w = img.width * s, h = img.height * s;
+    dctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
+    URL.revokeObjectURL(img.src);
+    toast('이미지를 불러왔습니다');
+  };
+  img.onerror = () => toast('이미지를 읽을 수 없습니다');
+  img.src = URL.createObjectURL(f);
+  e.target.value = '';
+});
+
+function drawStar(cx, cy, spikes, outer, inner, color) {
+  dctx.fillStyle = color;
+  dctx.beginPath();
+  for (let i = 0; i < spikes * 2; i++) {
+    const r = i % 2 === 0 ? outer : inner;
+    const a = (i * Math.PI) / spikes - Math.PI / 2;
+    const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+    if (i === 0) dctx.moveTo(x, y); else dctx.lineTo(x, y);
+  }
+  dctx.closePath(); dctx.fill();
+}
+document.getElementById('sampleBtn').addEventListener('click', () => {
+  pushUndo(); fillBG();
+  dctx.fillStyle = gray(230);
+  dctx.beginPath(); dctx.arc(165, 175, 105, 0, Math.PI * 2); dctx.fill();
+  dctx.fillStyle = gray(90);
+  dctx.beginPath(); dctx.arc(165, 175, 52, 0, Math.PI * 2); dctx.fill();
+  drawStar(360, 340, 5, 95, 42, gray(170));
+  dctx.fillStyle = gray(210);
+  dctx.fillRect(70, 390, 372, 36);
+  toast('샘플 그림을 그렸습니다');
+});
+
+// ================= 설정 =================
+const $ = (id) => document.getElementById(id);
+let heightMM = 10, baseMM = 2, smoothPX = 1, res = 128, invert = false;
+function triEstimate(r) { return 2 * r * r + 8 * r + 2; }
+function updateEst() { $('triEst').textContent = '예상 삼각형 수: 약 ' + triEstimate(res).toLocaleString('ko-KR') + '개'; }
+$('heightMM').addEventListener('input', (e) => { heightMM = +e.target.value; $('heightVal').textContent = heightMM + 'mm'; });
+$('baseMM').addEventListener('input', (e) => { baseMM = +e.target.value; $('baseVal').textContent = baseMM + 'mm'; });
+$('smoothPX').addEventListener('input', (e) => { smoothPX = +e.target.value; $('smoothVal').textContent = smoothPX + 'px'; });
+$('resSel').addEventListener('change', (e) => { res = +e.target.value; updateEst(); });
+$('invertChk').addEventListener('change', (e) => { invert = e.target.checked; });
+updateEst();
+
+// ================= 토스트 =================
+let toastTimer = null;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function downloadBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+}
+
+// ================= 3D 미리보기 (Three.js) =================
+const previewBox = document.getElementById('preview');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+previewBox.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 1, 2000);
+camera.position.set(85, -105, 80);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 1.4;
+scene.add(new THREE.HemisphereLight(0xdfeaff, 0x223344, 1.0));
+const dir = new THREE.DirectionalLight(0xffffff, 1.6);
+dir.position.set(60, 40, 120);
+scene.add(dir);
+const dir2 = new THREE.DirectionalLight(0x88aaff, 0.5);
+dir2.position.set(-70, -30, 40);
+scene.add(dir2);
+const mat = new THREE.MeshStandardMaterial({ color: 0x9fd8ff, metalness: 0.15, roughness: 0.55 });
+let mesh = null, stlBytes = null, objText = null;
+
+function sizeRenderer() {
+  const w = previewBox.clientWidth, h = previewBox.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+sizeRenderer();
+window.addEventListener('resize', sizeRenderer);
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+})();
+
+document.getElementById('rotBtn').addEventListener('click', (e) => {
+  controls.autoRotate = !controls.autoRotate;
+  e.target.classList.toggle('on', controls.autoRotate);
+});
+document.getElementById('wireBtn').addEventListener('click', (e) => {
+  mat.wireframe = !mat.wireframe;
+  e.target.classList.toggle('on', mat.wireframe);
+});
+
+// ================= 3D 생성 =================
+document.getElementById('genBtn').addEventListener('click', () => {
+  toast('3D 메시 생성 중...');
+  setTimeout(() => {
+    try {
+      const img = dctx.getImageData(0, 0, SIZE, SIZE);
+      const heights = computeHeights(img, SIZE, SIZE, res, invert, smoothPX);
+      const data = buildMeshData(heights, res, heightMM, baseMM, 100);
+      if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
+      g.computeVertexNormals();
+      mesh = new THREE.Mesh(g, mat);
+      scene.add(mesh);
+      stlBytes = encodeSTL(data.positions);
+      objText = encodeOBJ(data.positions);
+      const totalH = (baseMM + heightMM).toFixed(1);
+      document.getElementById('meshInfo').textContent =
+        '정점 약 ' + data.vertCount.toLocaleString('ko-KR') + '개 · 삼각형 약 ' +
+        data.triCount.toLocaleString('ko-KR') + '개 · 출력 크기 100 × 100 × ' + totalH + 'mm';
+      toast('3D 생성 완료!');
+      document.getElementById('sec3').scrollIntoView({ behavior: 'smooth' });
+      sizeRenderer();
+    } catch (err) {
+      toast('생성 실패: ' + err.message);
+    }
+  }, 30);
+});
+
+// ================= 다운로드 =================
+function needMesh() {
+  if (!mesh || !stlBytes) { toast('먼저 "3D 생성"을 눌러주세요'); return false; }
+  return true;
+}
+document.getElementById('dlStl').addEventListener('click', () => {
+  if (!needMesh()) return;
+  downloadBlob(new Blob([stlBytes], { type: 'model/stl' }), 'draw-to-3d.stl');
+  toast('STL 다운로드 시작');
+});
+document.getElementById('dlObj').addEventListener('click', () => {
+  if (!needMesh()) return;
+  downloadBlob(new Blob([objText], { type: 'text/plain' }), 'draw-to-3d.obj');
+  toast('OBJ 다운로드 시작');
+});
+document.getElementById('dlGlb').addEventListener('click', () => {
+  if (!needMesh()) return;
+  toast('GLB 변환 중...');
+  new GLTFExporter().parse(
+    mesh,
+    (buf) => {
+      downloadBlob(new Blob([buf], { type: 'model/gltf-binary' }), 'draw-to-3d.glb');
+      toast('GLB 다운로드 시작');
+    },
+    (err) => toast('GLB 내보내기 실패: ' + err),
+    { binary: true }
+  );
+});
+
+// ================= OctoPrint 전송 =================
+const OCTO_KEY = 'drawTo3dOcto';
+function octoCfg() {
+  return {
+    url: document.getElementById('octoUrl').value.trim().replace(/\/+$/, ''),
+    key: document.getElementById('octoKey').value.trim()
+  };
+}
+function saveOcto() {
+  try { localStorage.setItem(OCTO_KEY, JSON.stringify(octoCfg())); } catch (e) {}
+}
+(function loadOcto() {
+  try {
+    const s = JSON.parse(localStorage.getItem(OCTO_KEY) || 'null');
+    if (s) {
+      document.getElementById('octoUrl').value = s.url || '';
+      document.getElementById('octoKey').value = s.key || '';
+    }
+  } catch (e) {}
+})();
+document.getElementById('octoUrl').addEventListener('change', saveOcto);
+document.getElementById('octoKey').addEventListener('change', saveOcto);
+
+document.getElementById('octoTest').addEventListener('click', async () => {
+  const { url, key } = octoCfg();
+  saveOcto();
+  if (!url || !key) { toast('프린터 URL과 API 키를 입력하세요'); return; }
+  toast('연결 테스트 중...');
+  try {
+    const r = await fetch(url + '/api/version', { headers: { 'X-Api-Key': key } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    toast('연결 성공: OctoPrint ' + (j.server || ''));
+  } catch (e) {
+    toast('연결 실패: ' + e.message);
+  }
+});
+
+document.getElementById('octoSend').addEventListener('click', async () => {
+  const { url, key } = octoCfg();
+  saveOcto();
+  if (!url || !key) { toast('프린터 URL과 API 키를 입력하세요'); return; }
+  if (!needMesh()) return;
+  toast('프린터로 전송 중...');
+  try {
+    const fd = new FormData();
+    fd.append('file', new Blob([stlBytes], { type: 'model/stl' }), 'draw-to-3d.stl');
+    fd.append('print', 'false');
+    const r = await fetch(url + '/api/files/local', {
+      method: 'POST',
+      headers: { 'X-Api-Key': key },
+      body: fd
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => '');
+      throw new Error('HTTP ' + r.status + (t ? ' - ' + t.slice(0, 80) : ''));
+    }
+    toast('전송 완료! OctoPrint 파일 목록을 확인하세요');
+  } catch (e) {
+    toast('전송 실패: ' + e.message);
+  }
+});
+</script>
+</body>
+</html>
