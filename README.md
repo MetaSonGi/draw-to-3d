@@ -1,4 +1,13 @@
-# 🎨 draw-to-3d
+# 🎨 Draw to 3D | Draw to 3D
+
+> 마우스 드로잉·이미지를 3D 릴리프 모델로 변환 — STL/OBJ/GLB 다운로드 + OctoPrint 전송
+> Turn drawings and images into 3D relief models — download STL/OBJ/GLB, send to OctoPrint
+
+[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen?style=flat-square)](https://metasongi.github.io/draw-to-3d/) ![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=flat-square) ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square) ![Three.js](https://img.shields.io/badge/Three.js-000000?style=flat-square)
+
+🌐 **Live:** https://metasongi.github.io/draw-to-3d/
+
+---
 
 마우스로 그린 그림이나 업로드한 이미지를 3D 릴리프 모델로 변환하는 웹 도구입니다.
 **STL / OBJ / GLB**로 다운로드하고, OctoPrint가 설치된 3D 프린터로 바로 전송할 수 있습니다.
@@ -32,3 +41,9 @@
 - 높이맵 → (res+1)² 정점 그리드 + 옆면(skirt) + 바닥면으로 닫힌 솔리드 생성 (슬라이서 호환)
 - 출력 크기: 가로 100mm 고정, 단위 mm
 - STL은 바이너리 규격(84바이트 헤더 + facet당 50바이트)으로 직접 인코딩
+
+---
+
+## English Summary
+
+Turn mouse drawings and uploaded images into 3D relief models. Download as STL/OBJ/GLB and optionally send to an OctoPrint-connected 3D printer.
